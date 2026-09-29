@@ -18,6 +18,7 @@ import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { WorkspaceFileText } from '@deepseek-ai/dsh-api-workspace-files/types'
 import type { DocumentFileBytes } from './rpc.ts'
 import type { DocumentLoadMode } from './document/registry.ts'
+import type { DocumentOutlineView } from './document/contract.ts'
 
 /**
  * One page as the store keeps it: its text and the Host's line count, which
@@ -57,6 +58,10 @@ export interface TextTabState {
   scrollTop: number
   /** Whether long lines wrap instead of scrolling horizontally; on until the reader turns it off. */
   wrap: boolean
+  /** Whether the code outline pane is collapsed; false until the reader hides it. */
+  outlineCollapsed: boolean
+  /** Document Outline vs Class View in the code outline pane. */
+  outlineView: DocumentOutlineView
   /** The `navigation.revision` the body already answered; absent before the first. */
   revision: number | undefined
 }
@@ -81,6 +86,8 @@ export function fresh(): TextTabState {
     failure: undefined,
     scrollTop: 0,
     wrap: true,
+    outlineCollapsed: false,
+    outlineView: 'outline',
     revision: undefined,
   }
 }
@@ -101,6 +108,8 @@ type TextActions = {
   reset: (draft: TextState, tabId: TabId) => void
   scrolled: (draft: TextState, tabId: TabId, scrollTop: number) => void
   toggledWrap: (draft: TextState, tabId: TabId) => void
+  toggledOutlineCollapsed: (draft: TextState, tabId: TabId) => void
+  setOutlineView: (draft: TextState, tabId: TabId, view: DocumentOutlineView) => void
   navigated: (draft: TextState, tabId: TabId, revision: number) => void
   forget: (draft: TextState, tabId: TabId) => void
 }
@@ -217,6 +226,24 @@ export function createTextStore(): EngineStoreHandle<TextState, TextActions> {
       toggledWrap: (d, tabId: TabId) => {
         const state = bucket(d, tabId)
         state.wrap = !state.wrap
+      },
+      /**
+       * Switch one tab's code outline pane between shown and collapsed.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       */
+      toggledOutlineCollapsed: (d, tabId: TabId) => {
+        const state = bucket(d, tabId)
+        state.outlineCollapsed = !state.outlineCollapsed
+      },
+      /**
+       * Select Document Outline or Class View for one tab's code outline pane.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param view - outline presentation mode.
+       */
+      setOutlineView: (d, tabId: TabId, view: DocumentOutlineView) => {
+        bucket(d, tabId).outlineView = view
       },
       /**
        * Record that the body answered one navigation, so a remount restores the

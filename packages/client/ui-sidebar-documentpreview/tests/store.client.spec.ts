@@ -71,11 +71,25 @@ describe('text store', () => {
     instance.actions.page(TAB_1, pageValue(1, ['a'], true))
     instance.actions.scrolled(TAB_1, 120)
     instance.actions.toggledWrap(TAB_1)
+    instance.actions.toggledOutlineCollapsed(TAB_1)
+    instance.actions.setOutlineView(TAB_1, 'class')
     instance.actions.navigated(TAB_1, 3)
     instance.actions.reset(TAB_1)
     expect(instance.getSnapshot().byTab[TAB_1]).toEqual({
-      ...fresh(), loadRevision: 1, scrollTop: 120, wrap: false, revision: 3,
+      ...fresh(), loadRevision: 1, scrollTop: 120, wrap: false,
+      outlineCollapsed: true, outlineView: 'class', revision: 3,
     })
+  })
+
+  it('toggles outline collapse and remembers the outline view mode', () => {
+    const instance = createTextStore().create()
+    instance.actions.loading(TAB_1)
+    expect(instance.getSnapshot().byTab[TAB_1]?.outlineCollapsed).toBe(false)
+    expect(instance.getSnapshot().byTab[TAB_1]?.outlineView).toBe('outline')
+    instance.actions.toggledOutlineCollapsed(TAB_1)
+    instance.actions.setOutlineView(TAB_1, 'class')
+    expect(instance.getSnapshot().byTab[TAB_1]?.outlineCollapsed).toBe(true)
+    expect(instance.getSnapshot().byTab[TAB_1]?.outlineView).toBe('class')
   })
 
   it('forgets one tab and keeps the rest', () => {

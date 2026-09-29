@@ -27,6 +27,9 @@ export type DocumentContent =
     readonly reload: () => void
   }
 
+/** Code outline presentation mode persisted with the preview tab. */
+export type DocumentOutlineView = 'outline' | 'class'
+
 /** Content and viewing inputs shared by document bodies and nested PDF presentation. */
 export interface DocumentBodyOwner {
   /** Original file address, also readable through the standard useResource hook. */
@@ -37,6 +40,14 @@ export interface DocumentBodyOwner {
   readonly wrap: boolean
   /** Report a renderer-owned scrollport; passing `null` restores the shared body as the owner. */
   readonly scrollportRef: RefCallback<HTMLElement>
+  /** Whether the code outline pane is collapsed; code preview only. Defaults to shown. */
+  readonly outlineCollapsed?: boolean
+  /** Document Outline vs Class View; code preview only. Defaults to Document Outline. */
+  readonly outlineView?: DocumentOutlineView
+  /** Toggle the code outline pane collapsed state. */
+  readonly onToggleOutlineCollapsed?: () => void
+  /** Select Document Outline or Class View. @param view - outline presentation mode. */
+  readonly onSetOutlineView?: (view: DocumentOutlineView) => void
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

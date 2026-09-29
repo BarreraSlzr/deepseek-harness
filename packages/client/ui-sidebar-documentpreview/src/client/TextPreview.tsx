@@ -350,6 +350,10 @@ export function TextPreview({
         )}
         {content !== undefined && renderSlot('sidebar.right.tab.document', {
           resourceAddress: tab.contentId, content, wrap: state.wrap, scrollportRef: bindScrollport,
+          outlineCollapsed: state.outlineCollapsed,
+          outlineView: state.outlineView,
+          onToggleOutlineCollapsed: () => { actions.toggledOutlineCollapsed(tab.id) },
+          onSetOutlineView: (view) => { actions.setOutlineView(tab.id, view) },
         }, {
           entryKey: selected.id, hookContext: useTabInfo,
           fallback: <p className={css.statusLine}>{t('rendererUnavailable', { name: selected.title() })}</p>,

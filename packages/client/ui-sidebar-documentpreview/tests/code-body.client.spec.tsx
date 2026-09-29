@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import React from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { absoluteFileAddress, sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
@@ -42,7 +43,10 @@ function contents(pages: readonly string[], eof = false): DocumentContent {
 function props(content: DocumentContent, overrides: Partial<CodeBodyProps> = {}): CodeBodyProps {
   return {
     resourceAddress: sessionFileAddress(SESSION, 'source.ts'), sessionId: SESSION,
-    content, wrap: false, t: (key: keyof typeof en) => en[key], ...overrides,
+    content, wrap: false, scrollportRef: () => {},
+    outlineCollapsed: false, outlineView: 'outline',
+    onToggleOutlineCollapsed: () => {}, onSetOutlineView: () => {},
+    t: (key: keyof typeof en) => en[key], ...overrides,
   } as CodeBodyProps
 }
 
@@ -61,7 +65,9 @@ function tokens(root: HTMLElement) {
 function installStyles(): void {
   const directory = dirname(fileURLToPath(import.meta.url))
   const own = readFileSync(resolve(directory, '../src/client/code/CodeBody.module.css'), 'utf8')
-    .replaceAll('.renderer', `.${css.renderer}`).replaceAll('.code', `.${css.code}`)
+    .replaceAll('.renderer', `.${css.renderer}`)
+    .replaceAll('.codeColumn', `.${css.codeColumn}`)
+    .replaceAll('.code', `.${css.code}`)
   const shared = readFileSync(resolve(directory, '../../ui-primitives/src/markdown/CodeBlock.module.css'), 'utf8')
     .replaceAll('.block', `.${primitiveCss.block}`)
     .replaceAll('.content', `.${primitiveCss.content}`)
@@ -174,5 +180,54 @@ describe('CodeBody', () => {
     view.rerender(<CodeBody {...props(content)} />)
     expect(getComputedStyle(pre).whiteSpace).toBe('pre')
     expect(getComputedStyle(pre).overflowWrap).toBe('normal')
+  })
+
+  it('shows a Document Outline for TypeScript and hides it for unstructured text', async () => {
+    const source = [
+      'export function helper() { return 1 }',
+      'export class Service {',
+      '  run() { return 2 }',
+      '}',
+    ].join('\n')
+    const view = render(<CodeBody {...props(contents([source], true))} />)
+    await waitFor(() => { expect(view.container.querySelector('.shiki')).not.toBeNull() })
+    expect(view.container.querySelector('[data-code-outline]')).not.toBeNull()
+    expect(view.getByRole('tree', { name: 'Document outline' })).toBeTruthy()
+    expect(view.getByRole('treeitem', { name: /helper/ })).toBeTruthy()
+    expect(view.getByRole('treeitem', { name: /Service/ })).toBeTruthy()
+
+    const plain = render(<CodeBody {...props(contents(['no symbols here'], true), {
+      resourceAddress: sessionFileAddress(SESSION, 'notes.txt'),
+    })} />)
+    expect(plain.container.querySelector('[data-code-outline]')).toBeNull()
+  })
+
+  it('filters Class View and scrolls the code port when an outline row is activated', async () => {
+    const source = [
+      'export function helper() { return 1 }',
+      'export class Service {',
+      '  run() { return 2 }',
+      '}',
+    ].join('\n')
+    function Harness(): React.ReactElement {
+      const [outlineView, setOutlineView] = React.useState<'outline' | 'class'>('outline')
+      return <CodeBody {...props(contents([source], true), { outlineView, onSetOutlineView: setOutlineView })} />
+    }
+    const view = render(<Harness />)
+    await waitFor(() => { expect(view.container.querySelector('.shiki .line')).not.toBeNull() })
+    expect(view.getByRole('treeitem', { name: /helper/ })).toBeTruthy()
+    fireEvent.click(view.getByRole('button', { name: 'Class View' }))
+    await waitFor(() => {
+      expect(view.queryByRole('treeitem', { name: /helper/ })).toBeNull()
+    })
+    expect(view.getByRole('treeitem', { name: /Service/ })).toBeTruthy()
+
+    const scrollport = element(view.container, '[data-code-block-content]')
+    Object.defineProperty(scrollport, 'scrollTop', { configurable: true, writable: true, value: 0 })
+    const lines = scrollport.querySelectorAll('pre .line')
+    expect(lines.length).toBeGreaterThanOrEqual(2)
+    Object.defineProperty(lines.item(1)!, 'offsetTop', { configurable: true, value: 42 })
+    fireEvent.click(view.getByRole('treeitem', { name: /Service/ }))
+    expect(scrollport.scrollTop).toBe(42)
   })
 })
