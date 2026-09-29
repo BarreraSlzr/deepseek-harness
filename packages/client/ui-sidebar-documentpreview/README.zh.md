@@ -91,6 +91,8 @@ Office 注册、加载、缓存和字体提示位于 `src/client/office/`。Offi
 
 `ctx.sidebarRight.openResource(address, { params: { line } })` 通过 `file` 参数携带 1 起算的源码行号。在 `text-pages` 模式下，owner 顺序加载到该行或 EOF。纯文本与代码渲染器提供源码行锚点；Markdown 不提供。所选渲染器没有锚点时，导航保持待处理；用户切换到纯文本或代码后执行。代码导航直接滚动内部源码视口。字节模式渲染器不消费源码行导航。每个完成的导航 revision 只响应一次。不带 `revealIfOpened: false` 打开同一文件时聚焦已有 tab，并送达新 revision。
 
+代码预览在本地结构扫描于已累积文本中找到符号时，还会在源码旁显示文档大纲。「文档大纲」与「类视图」切换完整树与 class/interface/enum 成员。激活一行会滚动同一代码视口到该行。窗格折叠与大纲/类视图模式保存在该 tab 的预览 store 中，可跨 body 重挂载；树行展开状态在大纲树变化（新页或视图模式）时重新默认。大纲仅用于呈现：不进入 Session 日志或模型上下文。
+
 <a id="model-experience"></a>
 ## 模型体验
 
@@ -111,6 +113,7 @@ Office 注册、加载、缓存和字体提示位于 `src/client/office/`。Offi
 - **换行图标为包内自绘。** `IconWrapFill16` 与 `IconNowrapFill16` 住在 `src/client/icons.tsx`，直到共享图标集提供为止；它们的 props 已与共享图标契约一致。
 - **滚动写入未节流。** 每次滚动事件都把偏移记进 store；行块已 memo 化，于是由此引发的重渲染交还给 React 的是同一批元素。
 - **PDF chunk 加载失败后需要刷新页面。** React 会在页面生命周期内缓存被拒绝的 lazy import；已加载正文中的普通 PDF 打开或渲染失败仍可重试。
+- **代码大纲是启发式的，不是 LSP。** 文档大纲与类视图来自 TypeScript/JavaScript、Python、Markdown/MDX、JSON 与 YAML 的本地扫描器。其他语言隐藏该窗格。准确度尽力而为；嵌套或不寻常语法可能被漏掉。语言服务器 `documentSymbol` 与面向模型的大纲工具仍延期。
 
 <a id="dev-note"></a>
 ### 开发备注

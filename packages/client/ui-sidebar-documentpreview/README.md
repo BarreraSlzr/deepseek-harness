@@ -91,6 +91,8 @@ The shared `documentFileBytes()` helper decodes ordinary file and converted PDF 
 
 `ctx.sidebarRight.openResource(address, { params: { line } })` carries a 1-based source line through the `file` parameters. In `text-pages` mode, the owner loads sequential pages until that line or EOF. Plain-text and code renderers expose source-line anchors; Markdown does not. A navigation remains pending while its selected renderer has no anchor and runs if the user switches to plain text or code. Code navigation scrolls the inner source viewport directly. Byte-mode renderers do not consume source-line navigation. Each completed navigation revision is answered once. Opening the same file without `revealIfOpened: false` focuses its existing tab and delivers a new revision.
 
+Code previews also show a Document Outline beside the source when a local structural scan finds symbols in the accumulated text. Outline and Class View pills switch between the full tree and class/interface/enum members. Activating a row scrolls the same code viewport to that line. Pane collapse and Outline/Class View mode persist in the tab's preview store across body remounts; which tree rows are expanded re-defaults when the outline tree changes (new pages or view mode). The outline is presentation-only: it does not enter the Session log or model context.
+
 <a id="model-experience"></a>
 ## Model Experience
 
@@ -111,6 +113,7 @@ No direct effect; what the user reads here never enters a model request.
 - **Package-local wrap glyphs.** `IconWrapFill16` and `IconNowrapFill16` live in `src/client/icons.tsx` until the shared icon set carries them; their props already match the shared icon contract.
 - **Scroll writes are unthrottled.** Every scroll event records its offset in the store; the line blocks are memoized so the resulting re-render hands React the same elements back.
 - **A failed PDF chunk load requires a page reload.** React caches a rejected lazy import for the page lifetime; ordinary PDF open or render failures remain retryable inside the loaded body.
+- **Code outline is heuristic, not LSP.** Document Outline and Class View come from local scanners for TypeScript/JavaScript, Python, Markdown/MDX, JSON, and YAML. Other languages hide the pane. Accuracy is best-effort; nested or unusual syntax can be missed. Language-server `documentSymbol` and a model-facing outline tool remain deferred.
 
 <a id="dev-note"></a>
 ### Dev Note
