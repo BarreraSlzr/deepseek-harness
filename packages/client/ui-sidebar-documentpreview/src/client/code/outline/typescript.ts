@@ -17,6 +17,23 @@ const METHOD =
 const PROPERTY =
   /^(?:(?:public|private|protected|static|abstract|override|readonly|declare)\s+)+([A-Za-z_$][\w$]*)\s*[:=]/u
 
+/** Keywords after which `/` starts a regex literal, not division. */
+const REGEX_AFTER_KEYWORD = new Set([
+  'return', 'case', 'throw', 'typeof', 'delete', 'void', 'await', 'new', 'yield', 'in', 'of', 'instanceof',
+])
+
+/** Cross-line scan state for comments and template literals. */
+interface ScanState {
+  inBlockComment: boolean
+  /** Inside a `` `...` `` template (possibly spanning lines). */
+  inTemplate: boolean
+  /**
+   * Brace depth inside a `${ ... }` interpolation. Zero means template text
+   * (braces are literal); greater than zero means real code braces count.
+   */
+  templateExprDepth: number
+}
+
 /**
  * Build a TS/JS outline: top-level declarations and class members via brace depth.
  * @param text - UTF-8 source.
@@ -27,36 +44,35 @@ export function outlineTypeScript(text: string): OutlineNode[] {
   const roots: OutlineNode[] = []
   let depth = 0
   const classStack: { node: OutlineNode; depth: number; children: OutlineNode[] }[] = []
-  const commentState = { inBlockComment: false }
+  const scanState: ScanState = { inBlockComment: false, inTemplate: false, templateExprDepth: 0 }
 
   const flushClass = (untilDepth: number): void => {
-    while (classStack.length > 0) {
-      const top = classStack[classStack.length - 1]
+    while (true) {
+      const top = classStack.at(-1)
       if (top === undefined || top.depth < untilDepth) break
       classStack.pop()
       const finished: OutlineNode = top.children.length === 0
         ? { kind: top.node.kind, name: top.node.name, line: top.node.line }
         : { kind: top.node.kind, name: top.node.name, line: top.node.line, children: top.children }
-      const parent = classStack[classStack.length - 1]
+      const parent = classStack.at(-1)
       if (parent === undefined) roots.push(finished)
       else parent.children.push(finished)
     }
   }
 
-  for (let i = 0; i < lines.length; i += 1) {
-    const raw = lines[i]
-    if (raw === undefined) continue
-    const code = stripCommentsForCode(raw, commentState)
+  let lineNumber = 0
+  for (const raw of lines) {
+    lineNumber += 1
+    const code = normalizeLineForBraces(raw, scanState)
     const trimmed = code.trim()
     if (trimmed.length === 0) {
-      // Comment-/whitespace-only lines never retain braces after stripping.
       depth += braceDelta(code)
       flushClass(depth)
       continue
     }
 
     if (depth === 0) {
-      const node = matchTopLevel(trimmed, i + 1)
+      const node = matchTopLevel(trimmed, lineNumber)
       if (node !== undefined) {
         if (node.kind === 'class' || node.kind === 'interface' || node.kind === 'enum') {
           classStack.push({ node, depth: 0, children: [] })
@@ -64,14 +80,14 @@ export function outlineTypeScript(text: string): OutlineNode[] {
           roots.push(node)
         }
       }
-    } else if (classStack.length > 0) {
-      const current = classStack[classStack.length - 1]
+    } else {
+      const current = classStack.at(-1)
       if (current !== undefined && depth === current.depth + 1) {
-        const nested = matchTopLevel(trimmed, i + 1)
+        const nested = matchTopLevel(trimmed, lineNumber)
         if (nested !== undefined && (nested.kind === 'class' || nested.kind === 'interface' || nested.kind === 'enum')) {
           classStack.push({ node: nested, depth, children: [] })
         } else {
-          const member = matchMember(trimmed, i + 1)
+          const member = matchMember(trimmed, lineNumber)
           if (member !== undefined) current.children.push(member)
         }
       }
@@ -119,28 +135,13 @@ function matchMember(line: string, lineNumber: number): OutlineNode | undefined 
 }
 
 /**
- * Count braces outside strings. Callers must strip comments first so `}` in
- * `//` or JSDoc cannot collapse nesting.
- * @param line - code with comments already removed.
+ * Count braces on a line already normalized so strings, regexes, comments, and
+ * template text contribute no `{` / `}`.
+ * @param line - normalized code line.
  */
 function braceDelta(line: string): number {
   let delta = 0
-  let inString: '"' | "'" | '`' | null = null
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i]
-    if (ch === undefined) break
-    if (inString !== null) {
-      if (ch === '\\') {
-        i += 1
-        continue
-      }
-      if (ch === inString) inString = null
-      continue
-    }
-    if (ch === '"' || ch === "'" || ch === '`') {
-      inString = ch
-      continue
-    }
+  for (const ch of line) {
     if (ch === '{') delta += 1
     else if (ch === '}') delta -= 1
   }
@@ -148,60 +149,224 @@ function braceDelta(line: string): number {
 }
 
 /**
- * Remove line and block comments while preserving string contents as spaces so
- * brace positions stay aligned for multi-line block comments.
+ * Blank comments, string/regex bodies, and template text so brace counting sees
+ * only structural code (including `${ ... }` interpolations).
  * @param line - raw source line.
- * @param state - cross-line block-comment flag.
- * @returns the line with comment regions blanked.
+ * @param state - cross-line comment / template state.
+ * @returns line with non-code regions replaced by spaces.
  */
-function stripCommentsForCode(line: string, state: { inBlockComment: boolean }): string {
+function normalizeLineForBraces(line: string, state: ScanState): string {
   const out: string[] = []
-  let inString: '"' | "'" | '`' | null = null
+  let inString: '"' | "'" | null = null
+  let inRegex = false
+  let escape = false
+  /** Last significant code character — decides whether `/` starts a regex. */
+  let prevCode = ''
+  /** Identifier/keyword just completed before whitespace or punctuator. */
+  let prevWord = ''
+  let word = ''
+
+  const blank = (ch: string): void => {
+    out.push(ch === '\t' ? '\t' : ' ')
+  }
+
+  const endWord = (): void => {
+    if (word.length > 0) {
+      prevWord = word
+      word = ''
+    }
+  }
+
+  const emitCode = (ch: string): void => {
+    out.push(ch)
+    if (ch === ' ' || ch === '\t') {
+      endWord()
+      return
+    }
+    if (/[A-Za-z_$0-9]/u.test(ch)) {
+      word += ch
+      prevCode = ch
+      return
+    }
+    endWord()
+    prevCode = ch
+    prevWord = ''
+  }
+
   for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i]
-    if (ch === undefined) break
+    const ch = line.charAt(i)
+    const next = line.charAt(i + 1)
+
     if (state.inBlockComment) {
-      if (ch === '*' && line[i + 1] === '/') {
-        out.push(' ', ' ')
+      if (ch === '*' && next === '/') {
+        blank(ch)
+        blank(next)
         state.inBlockComment = false
         i += 1
         continue
       }
-      out.push(ch === '\t' ? '\t' : ' ')
+      blank(ch)
       continue
     }
-    if (inString !== null) {
-      out.push(ch)
+
+    // Template literal text (not inside `${}`): braces are literal content.
+    if (state.inTemplate && state.templateExprDepth === 0) {
+      if (escape) {
+        blank(ch)
+        escape = false
+        continue
+      }
       if (ch === '\\') {
-        const next = line[i + 1]
-        if (next !== undefined) {
-          out.push(next)
+        blank(ch)
+        escape = true
+        continue
+      }
+      if (ch === '`') {
+        blank(ch)
+        state.inTemplate = false
+        prevCode = '`'
+        prevWord = ''
+        continue
+      }
+      if (ch === '$' && next === '{') {
+        blank(ch)
+        endWord()
+        emitCode('{')
+        state.templateExprDepth = 1
+        i += 1
+        continue
+      }
+      blank(ch)
+      continue
+    }
+
+    if (inString !== null) {
+      blank(ch)
+      if (escape) {
+        escape = false
+        continue
+      }
+      if (ch === '\\') {
+        escape = true
+        continue
+      }
+      if (ch === inString) {
+        inString = null
+        prevCode = ch
+        prevWord = ''
+      }
+      continue
+    }
+
+    if (inRegex) {
+      blank(ch)
+      if (escape) {
+        escape = false
+        continue
+      }
+      if (ch === '\\') {
+        escape = true
+        continue
+      }
+      if (ch === '/') {
+        inRegex = false
+        prevCode = '/'
+        prevWord = ''
+        while (i + 1 < line.length && /[a-z]/iu.test(line.charAt(i + 1))) {
           i += 1
+          blank(line.charAt(i))
+        }
+      }
+      continue
+    }
+
+    if (ch === '"' || ch === "'") {
+      endWord()
+      inString = ch
+      blank(ch)
+      continue
+    }
+
+    if (ch === '`') {
+      endWord()
+      if (state.templateExprDepth > 0) {
+        // Nested template inside `${...}`: blank through its closer on this line.
+        blank(ch)
+        let nestedEscape = false
+        while (i + 1 < line.length) {
+          i += 1
+          const nested = line.charAt(i)
+          blank(nested)
+          if (nestedEscape) {
+            nestedEscape = false
+            continue
+          }
+          if (nested === '\\') {
+            nestedEscape = true
+            continue
+          }
+          if (nested === '`') break
         }
         continue
       }
-      if (ch === inString) inString = null
+      state.inTemplate = true
+      state.templateExprDepth = 0
+      blank(ch)
       continue
     }
-    if (ch === '"' || ch === "'" || ch === '`') {
-      inString = ch
-      out.push(ch)
-      continue
-    }
-    if (ch === '/' && line[i + 1] === '/') {
+
+    if (ch === '/' && next === '/') {
+      endWord()
       while (i < line.length) {
-        out.push(' ')
+        blank(line.charAt(i))
         i += 1
       }
       break
     }
-    if (ch === '/' && line[i + 1] === '*') {
-      out.push(' ', ' ')
+    if (ch === '/' && next === '*') {
+      endWord()
+      blank(ch)
+      blank(next)
       state.inBlockComment = true
       i += 1
       continue
     }
-    out.push(ch)
+    if (ch === '/' && next !== '=' && canStartRegex(prevCode, prevWord)) {
+      endWord()
+      inRegex = true
+      blank(ch)
+      continue
+    }
+
+    if (state.templateExprDepth > 0) {
+      if (ch === '{') {
+        state.templateExprDepth += 1
+        emitCode(ch)
+        continue
+      }
+      if (ch === '}') {
+        state.templateExprDepth -= 1
+        emitCode(ch)
+        // Returning to template text after the interpolation's closing brace.
+        if (state.templateExprDepth === 0) state.inTemplate = true
+        continue
+      }
+    }
+
+    emitCode(ch)
   }
+
+  endWord()
   return out.join('')
+}
+
+/**
+ * Whether `/` may open a regex literal (vs division) given prior code context.
+ * @param prev - last significant code character, or empty at line start.
+ * @param prevWord - last completed identifier/keyword before punctuator/space.
+ */
+function canStartRegex(prev: string, prevWord: string): boolean {
+  if (prev.length === 0) return true
+  if ('({[%=!&|?:;,+-~^<>*'.includes(prev)) return true
+  return REGEX_AFTER_KEYWORD.has(prevWord)
 }

@@ -92,22 +92,44 @@ interface OutlineTreeProps {
 
 function OutlineTree({ nodes, label, expandLabel, collapseLabel, onActivate }: OutlineTreeProps): ReactNode {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => defaultExpanded(nodes))
+  // Ids the user collapsed stay collapsed across streamed pages / view switches.
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => new Set())
+
+  const expandNode = (id: string): void => {
+    setCollapsedIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+    setExpanded(prev => new Set(prev).add(id))
+  }
+
+  const collapseNode = (id: string): void => {
+    setCollapsedIds(prev => new Set(prev).add(id))
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
   // Stable kind+name+line ids survive Class View filtering; merge defaults when
-  // the tree gains nodes (streamed pages or view switches) without collapsing prior opens.
+  // the tree gains nodes without re-opening rows the user collapsed.
   useEffect(() => {
     setExpanded((prev) => {
       const defaults = defaultExpanded(nodes)
       let changed = false
       const next = new Set(prev)
       for (const id of defaults) {
-        if (!next.has(id)) {
+        if (!next.has(id) && !collapsedIds.has(id)) {
           next.add(id)
           changed = true
         }
       }
       return changed ? next : prev
     })
-  }, [nodes])
+  }, [nodes, collapsedIds])
   const flat = flatten(nodes, expanded)
 
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>): void => {
@@ -132,18 +154,14 @@ function OutlineTree({ nodes, label, expandLabel, collapseLabel, onActivate }: O
     } else if (event.key === 'ArrowRight') {
       event.preventDefault()
       if (row.hasChildren && !expanded.has(row.id)) {
-        setExpanded(prev => new Set(prev).add(row.id))
+        expandNode(row.id)
       } else if (row.hasChildren) {
         focusIndex(event.currentTarget, index + 1)
       }
     } else if (event.key === 'ArrowLeft') {
       event.preventDefault()
       if (row.hasChildren && expanded.has(row.id)) {
-        setExpanded((prev) => {
-          const next = new Set(prev)
-          next.delete(row.id)
-          return next
-        })
+        collapseNode(row.id)
       } else if (row.depth > 0) {
         let parentIndex = 0
         for (let i = index - 1; i >= 0; i -= 1) {
@@ -185,12 +203,8 @@ function OutlineTree({ nodes, label, expandLabel, collapseLabel, onActivate }: O
                   data-code-outline-twist
                   onClick={(event) => {
                     event.stopPropagation()
-                    setExpanded((prev) => {
-                      const next = new Set(prev)
-                      if (open) next.delete(row.id)
-                      else next.add(row.id)
-                      return next
-                    })
+                    if (open) collapseNode(row.id)
+                    else expandNode(row.id)
                   }}
                 >
                   {open ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}

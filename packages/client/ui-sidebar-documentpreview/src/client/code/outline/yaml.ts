@@ -11,14 +11,14 @@ const TOP_KEY = /^([A-Za-z_][\w.-]*)\s*:/u
 export function outlineYaml(text: string): OutlineNode[] {
   const roots: OutlineNode[] = []
   const lines = text.split('\n')
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i]
-    if (line === undefined) continue
+  let lineNumber = 0
+  for (const line of lines) {
+    lineNumber += 1
     if (line.length === 0 || line.startsWith(' ') || line.startsWith('\t') || line.startsWith('#')) continue
     if (line.startsWith('---') || line.startsWith('...')) continue
     const match = TOP_KEY.exec(line)
     if (match?.[1] === undefined) continue
-    roots.push({ kind: 'property', name: match[1], line: i + 1 })
+    roots.push({ kind: 'property', name: match[1], line: lineNumber })
   }
   return roots
 }

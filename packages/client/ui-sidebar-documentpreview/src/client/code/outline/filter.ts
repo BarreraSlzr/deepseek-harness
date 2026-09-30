@@ -1,5 +1,11 @@
 /** Class View filter and outline tree capping helpers. */
-import { MAX_OUTLINE_DEPTH, MAX_OUTLINE_NODES, type OutlineKind, type OutlineNode } from './types.ts'
+import {
+  CLASS_VIEW_KINDS,
+  MAX_OUTLINE_DEPTH,
+  MAX_OUTLINE_NODES,
+  type OutlineKind,
+  type OutlineNode,
+} from './types.ts'
 
 /**
  * Keep class/interface/enum nodes and their nested methods/properties.
@@ -27,7 +33,7 @@ export function filterClassView(nodes: readonly OutlineNode[]): OutlineNode[] {
 function filterClassMembers(nodes: readonly OutlineNode[]): OutlineNode[] {
   const out: OutlineNode[] = []
   for (const node of nodes) {
-    if (node.kind === 'method' || node.kind === 'property') {
+    if (CLASS_VIEW_KINDS.has(node.kind) && !isClassViewRoot(node.kind)) {
       out.push({ kind: node.kind, name: node.name, line: node.line })
       continue
     }

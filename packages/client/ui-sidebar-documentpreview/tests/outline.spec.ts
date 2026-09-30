@@ -133,6 +133,41 @@ describe('outlineTypeScript', () => {
     expect(outlineTypeScript(text).map(n => n.name)).toEqual(['Service'])
     expect(outlineTypeScript(text)[0]?.children?.map(n => n.name)).toEqual(['ok'])
   })
+
+  it('ignores braces inside regex literals and multi-line templates', () => {
+    const text = [
+      '/\\{/',
+      'const re = /\\{/gi',
+      'const page = `',
+      'brace \\{ still template',
+      '{ not a scope',
+      '`',
+      'export class Service {',
+      '  run() {}',
+      '}',
+      'const after = /}/',
+      'return /x/',
+      'export function keep() {}',
+    ].join('\n')
+    expect(outlineTypeScript(text)).toEqual([
+      {
+        kind: 'class', name: 'Service', line: 7,
+        children: [{ kind: 'method', name: 'run', line: 8 }],
+      },
+      { kind: 'function', name: 'keep', line: 12 },
+    ])
+  })
+
+  it('counts braces inside template interpolations and blanks nested templates', () => {
+    const text = [
+      'const label = `x ${foo({ a: 1 })} y`',
+      'const nested = `outer ${`inner \\` tick`} z`',
+      'export class Service {',
+      '  run() {}',
+      '}',
+    ].join('\n')
+    expect(outlineTypeScript(text).map(n => n.name)).toEqual(['Service'])
+  })
 })
 
 describe('outlinePython', () => {
@@ -180,6 +215,26 @@ describe('outlineMarkdown', () => {
           },
           { kind: 'heading', name: 'Other', line: 4 },
         ],
+      },
+    ])
+  })
+
+  it('skips ATX-looking lines inside fenced code blocks', () => {
+    const text = [
+      '# Title',
+      '```bash',
+      '# install deps',
+      'pnpm install',
+      '```',
+      '## Section',
+      '~~~',
+      '# not a heading',
+      '~~~',
+    ].join('\n')
+    expect(outlineMarkdown(text)).toEqual([
+      {
+        kind: 'heading', name: 'Title', line: 1,
+        children: [{ kind: 'heading', name: 'Section', line: 6 }],
       },
     ])
   })

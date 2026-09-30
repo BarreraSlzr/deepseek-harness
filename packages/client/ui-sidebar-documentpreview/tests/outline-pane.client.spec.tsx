@@ -123,6 +123,20 @@ describe('OutlinePane', () => {
     })
   })
 
+  it('keeps a manually collapsed row collapsed across streamed pages', async () => {
+    const view = render(<Harness />)
+    const service = view.getByRole('treeitem', { name: /Service/ })
+    const twist = service.querySelector('[data-code-outline-twist]')!
+    fireEvent.click(twist)
+    expect(view.queryByRole('treeitem', { name: /run/ })).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'stream' }))
+    await waitFor(() => {
+      expect(view.getByRole('treeitem', { name: /Streamed/ })).toBeTruthy()
+      expect(view.getByRole('treeitem', { name: /later/ })).toBeTruthy()
+    })
+    expect(view.queryByRole('treeitem', { name: /run/ })).toBeNull()
+  })
+
   it('activates a leaf row on click and Space', () => {
     const onActivate = vi.fn()
     const view = render(<Harness onActivate={onActivate} />)
@@ -144,6 +158,27 @@ describe('OutlinePane', () => {
     expect(document.activeElement).toBe(run)
     fireEvent.keyDown(run, { key: 'ArrowLeft' })
     expect(document.activeElement).toBe(service)
+    const id = view.getByRole('treeitem', { name: /id/ })
+    fireEvent.keyDown(id, { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(service)
+  })
+
+  it('expands a never-collapsed deep row with ArrowRight without touching collapsedIds', () => {
+    const deep: OutlineNode[] = [{
+      kind: 'class', name: 'Outer', line: 1,
+      children: [{
+        kind: 'class', name: 'Mid', line: 2,
+        children: [{
+          kind: 'class', name: 'Leaf', line: 3,
+          children: [{ kind: 'method', name: 'go', line: 4 }],
+        }],
+      }],
+    }]
+    const view = render(<Harness initial={deep} />)
+    expect(view.queryByRole('treeitem', { name: /go/ })).toBeNull()
+    const leaf = view.getByRole('treeitem', { name: /Leaf/ })
+    fireEvent.keyDown(leaf, { key: 'ArrowRight' })
+    expect(view.getByRole('treeitem', { name: /go/ })).toBeTruthy()
   })
 
   it('ignores ArrowRight on leaves and ArrowLeft on roots without collapsing', () => {

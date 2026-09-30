@@ -91,7 +91,7 @@ Office 注册、加载、缓存和字体提示位于 `src/client/office/`。Offi
 
 `ctx.sidebarRight.openResource(address, { params: { line } })` 通过 `file` 参数携带 1 起算的源码行号。在 `text-pages` 模式下，owner 顺序加载到该行或 EOF。纯文本与代码渲染器提供源码行锚点；Markdown 不提供。所选渲染器没有锚点时，导航保持待处理；用户切换到纯文本或代码后执行。代码导航直接滚动内部源码视口。字节模式渲染器不消费源码行导航。每个完成的导航 revision 只响应一次。不带 `revealIfOpened: false` 打开同一文件时聚焦已有 tab，并送达新 revision。
 
-代码预览在本地结构扫描于已累积文本中找到符号时，还会在源码旁显示文档大纲。「文档大纲」与「类视图」切换完整树与 class/interface/enum 成员。激活一行会滚动同一代码视口到该行。窗格折叠与大纲/类视图模式保存在该 tab 的预览 store 中，可跨 body 重挂载；树行展开状态在大纲树变化（新页或视图模式）时重新默认。大纲仅用于呈现：不进入 Session 日志或模型上下文。
+代码预览在本地结构扫描于已累积文本中找到符号时，还会在源码旁显示文档大纲。「文档大纲」与「类视图」切换完整树与 class/interface/enum 成员。激活一行会滚动同一代码视口到该行。窗格折叠与大纲/类视图模式保存在该 tab 的预览 store 中，可跨 body 重挂载；新出现的树行默认展开，用户手动折叠的行在流式分页后仍保持折叠。大纲仅用于呈现：不进入 Session 日志或模型上下文。
 
 <a id="model-experience"></a>
 ## 模型体验

@@ -60,8 +60,7 @@ function topLevelKeyLines(text: string): Map<string, number> {
   let keyLine = 1
 
   for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i]
-    if (ch === undefined) break
+    const ch = text.charAt(i)
     if (ch === '\n') {
       line += 1
       continue
@@ -79,8 +78,8 @@ function topLevelKeyLines(text: string): Map<string, number> {
         inString = false
         if (depth === 1 && keyStart >= 0) {
           let j = i + 1
-          while (j < text.length && (text[j] === ' ' || text[j] === '\t' || text[j] === '\r')) j += 1
-          if (text[j] === ':') {
+          while (j < text.length && (text.charAt(j) === ' ' || text.charAt(j) === '\t' || text.charAt(j) === '\r')) j += 1
+          if (text.charAt(j) === ':') {
             // Successfully parsed JSON only contains valid JSON string keys.
             const key = JSON.parse(text.slice(keyStart, i + 1)) as string
             if (!map.has(key)) map.set(key, keyLine)
@@ -117,8 +116,7 @@ function topLevelArrayElementLines(text: string): number[] {
   let expectElement = false
 
   for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i]
-    if (ch === undefined) break
+    const ch = text.charAt(i)
     if (ch === '\n') {
       line += 1
       continue
@@ -174,8 +172,8 @@ function isJsonWhitespace(ch: string): boolean {
 
 function lineCount(text: string): number {
   let count = 1
-  for (let i = 0; i < text.length; i += 1) {
-    if (text[i] === '\n') count += 1
+  for (const ch of text) {
+    if (ch === '\n') count += 1
   }
   return count
 }
