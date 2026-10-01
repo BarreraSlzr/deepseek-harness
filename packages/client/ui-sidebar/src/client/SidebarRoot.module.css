@@ -257,6 +257,11 @@
   justify-content: center;
 }
 
+.brandMark img {
+  display: block;
+  border-radius: 6px;
+}
+
 .brandName {
   display: inline-flex;
   align-items: center;

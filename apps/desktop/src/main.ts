@@ -399,7 +399,7 @@ async function main(): Promise<void> {
     const url = new URL(request.url)
     if (url.hostname === 'app') {
       if (url.pathname === '/' || url.pathname === '/index.html' || url.pathname.startsWith('/assets/')
-        || ['/favicon.svg', '/manifest.webmanifest'].includes(url.pathname)) {
+        || ['/favicon.svg', '/manifest.webmanifest', '/icon.png', '/icon-192.png', '/icon-512.png', '/apple-icon.png'].includes(url.pathname)) {
         return serveWebDocument(request, join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist'))
       }
       if (backend.host === undefined || hostUrl === undefined || hostCookie === undefined) {
