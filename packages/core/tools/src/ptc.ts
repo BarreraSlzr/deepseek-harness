@@ -548,12 +548,6 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         }
         type DispatchOutcome = { isError: true; message: string } | { isError: false; value: JsonValue }
         const scheduler = registry[TOOL_RUNTIME_SCHEDULER]
-        if (scheduler === undefined) {
-          throw new Error(
-            'tool runtime scheduler missing on registry (Symbol key not found); '
-            + 'rebuild @deepseek-ai/dsh-tools so PTC and ToolRuntime share one module',
-          )
-        }
         const outcome = await new Promise<DispatchOutcome>((resolve, reject) => {
           // Set by the dispatch stage (or start() for a pre-settled result): what commit() finalizes in submission order.
           let parked:

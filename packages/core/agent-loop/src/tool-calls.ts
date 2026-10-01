@@ -167,14 +167,7 @@ async function runGroup(
     const call = group[index]!
     callSeqs[index] = appendToolCall(session, turn, step, call.block)
     started++
-    const scheduler = ctx.tools[TOOL_RUNTIME_SCHEDULER]
-    if (scheduler === undefined) {
-      throw new Error(
-        'tool runtime scheduler missing on ctx.tools (Symbol key not found); '
-        + 'rebuild @deepseek-ai/dsh-tools and restart so agent-loop and tools share one module',
-      )
-    }
-    const prepared = await scheduler.prepare(call.exec)
+    const prepared = await ctx.tools[TOOL_RUNTIME_SCHEDULER].prepare(call.exec)
     throwSchedulerFailure()
     switch (prepared.kind) {
       case 'dispatch': {
