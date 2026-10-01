@@ -462,7 +462,7 @@ export interface ToolRuntimeScheduler {
  * Node loads two physical copies of this package (source vs lib, nested deps).
  * @internal
  */
-export const TOOL_RUNTIME_SCHEDULER: unique symbol = Symbol.for('@deepseek-ai/dsh-tools.scheduler') as unique symbol
+export const TOOL_RUNTIME_SCHEDULER = Symbol.for('@deepseek-ai/dsh-tools.scheduler')
 
 /** Canonical error code for cancellation after a tool body was invoked. */
 export const TOOL_ABORTED = 'ABORTED'
